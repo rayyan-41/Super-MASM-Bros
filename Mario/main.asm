@@ -519,7 +519,7 @@ HudBG:
     call Gotoxy
     cmp CurrentScreen, 0
     je ShowL1
-    mov edx, OFFSET strLvl2
+    mov edx, OFFSET strLevelInfo2
     jmp PrintLvl
 ShowL1:
     mov edx, OFFSET strLevelInfo
