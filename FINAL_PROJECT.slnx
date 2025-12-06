@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="Mario/Mario.vcxproj" />
+  <Project Path="Mario/Mario.vcxproj" Id="d11676bc-9121-4217-a661-2a4b3bd28203" />
 </Solution>

@@ -128,7 +128,7 @@ VK_ESCAPE    EQU 1Bh
     strInst7        BYTE "AVOID GOOMBAS (G) OR JUMP ON THEM!", 0
     strInst8        BYTE "REACH THE FLAG (F) TO WIN!", 0
 
-    MasmColors      DWORD yellow, lightRed, lightBlue, lightGreen, lightMagenta, cyan
+    MasmColors      DWORD yellow, white, lightBlue, lightGreen, lightMagenta, cyan
     MasmColorCount  = 6
     CurrentColorIdx DWORD 0
     LastTimer       DWORD 0
@@ -333,7 +333,8 @@ GoToInstructions:
 ; GAME LOGIC
 ; =======================================================
 StartGameSequence:
-    INVOKE PlaySound, OFFSET fileStart, NULL, SND_FILENAME OR SND_ASYNC
+    ; Play start sound SYNC first (before anything else)
+    INVOKE PlaySound, OFFSET fileStart, NULL, SND_FILENAME OR SND_SYNC
     
     call Clrscr
     mov dl, 45
@@ -346,7 +347,8 @@ StartGameSequence:
     mov ecx, 15
     call ReadString
     
-    INVOKE PlaySound, OFFSET fileMario, NULL, SND_FILENAME OR SND_ASYNC
+    ; Play mario.wav SYNC before level starts
+    INVOKE PlaySound, OFFSET fileMario, NULL, SND_FILENAME OR SND_SYNC
     
     mov CurrentScreen, 0
     mov MarioX, 5
@@ -362,6 +364,8 @@ StartGameSequence:
     call InitEnemies
     call RenderLevelFromMap
     call DrawMarioChar
+    
+    ; Now start background music ASYNC
     call StartLevelMusic
     
     call GetMseconds
@@ -520,9 +524,27 @@ ShowWinScreen:
     mov GameWon, 0
     call SaveHighScore
     INVOKE PlaySound, NULL, 0, SND_PURGE
-    call Clrscr
     
-    ; Set black background
+    ; Draw completely black screen
+    call Clrscr
+    mov eax, black + (black * 16)
+    call SetTextColor
+    
+    ; Fill entire screen with black
+    mov dh, 0
+WinBlackRows:
+    mov dl, 0
+    call Gotoxy
+    mov ecx, 120
+WinBlackBG:
+    mov al, ' '
+    call WriteChar
+    loop WinBlackBG
+    inc dh
+    cmp dh, 30
+    jl WinBlackRows
+    
+    ; Now draw text in white on black
     mov eax, white + (black * 16)
     call SetTextColor
     
@@ -538,8 +560,8 @@ ShowWinScreen:
     mov edx, OFFSET strScoreSaved
     call WriteString
     
-    ; Show coins collected
-    mov dl, 52
+    ; Show final score (coins collected)
+    mov dl, 50
     mov dh, 14
     call Gotoxy
     mov edx, OFFSET strCoins
@@ -547,8 +569,15 @@ ShowWinScreen:
     mov eax, CoinsCollected
     call WriteDec
     
+    ; Show player name
+    mov dl, 50
+    mov dh, 16
+    call Gotoxy
+    mov edx, OFFSET PlayerName
+    call WriteString
+    
     mov dl, 45
-    mov dh, 18
+    mov dh, 20
     call Gotoxy
     mov edx, OFFSET strPressAnyKey
     call WriteString
@@ -1161,19 +1190,19 @@ D_Gnd:  mov eax, white + (green*16)
         mov al, ' '
         call WriteChar
         jmp NextT
-D_Brk:  mov eax, white + (red*16)
+D_Brk:  mov eax, black + (lightRed*16)
         call SetTextColor
         call Gotoxy
-        mov al, 219
+        mov al, 176
         call WriteChar
         jmp NextT
-D_Que:  mov eax, white + (yellow*16)
+D_Que:  mov eax, brown + (yellow*16)
         call SetTextColor
         call Gotoxy
         mov al, '?'
         call WriteChar
         jmp NextT
-D_Pip:  mov eax, lightGreen + (green*16)
+D_Pip:  mov eax, green
         call SetTextColor
         call Gotoxy
         mov al, 219
@@ -1217,21 +1246,34 @@ NextT:
     inc dh
     cmp dh, 25
     jl RowLoop
-    mov eax, gray + (black * 16)
+    
+    ; --- BOTTOM AREA (rows 25-29) - All black background ---
+    mov eax, black + (black * 16)
     call SetTextColor
-    mov dl, 0
+    
+    ; Fill rows 25-29 with black background
     mov dh, 25
+BlackRows:
+    mov dl, 0
     call Gotoxy
     mov ecx, 120
-FooterBG:
+BlackBG:
     mov al, ' '
     call WriteChar
-    loop FooterBG
+    loop BlackBG
+    inc dh
+    cmp dh, 30
+    jl BlackRows
+    
+    ; Draw footer text centered on row 27
+    mov eax, gray + (black * 16)
+    call SetTextColor
     mov dl, 38
-    mov dh, 25
+    mov dh, 27
     call Gotoxy
     mov edx, OFFSET strFooter
     call WriteString
+    
     ret
 RenderLevelFromMap ENDP
 
@@ -1281,6 +1323,8 @@ DrawFullMenu ENDP
 DrawBorder PROC
     mov eax, brown + (black * 16)
     call SetTextColor
+    
+    ; Top border (row 0)
     mov ecx, 120
     mov dl, 0
     mov dh, 0
@@ -1288,14 +1332,18 @@ DrawBorder PROC
 L1: mov al, 219
     call WriteChar
     loop L1
+    
+    ; Bottom border (row 29)
     mov ecx, 120
     mov dl, 0
-    mov dh, 27
+    mov dh, 29
     call Gotoxy
 L2: mov al, 219
     call WriteChar
     loop L2
-    mov ecx, 26
+    
+    ; Side borders (rows 1-28)
+    mov ecx, 28
     mov dh, 1
 L3: mov dl, 0
     call Gotoxy
@@ -1312,7 +1360,7 @@ DrawBorder ENDP
 
 DrawMenuText PROC
     mov dl, 49
-    mov dh, 21
+    mov dh, 20
     call Gotoxy
     cmp MenuSelection, 0
     je Hl0
@@ -1328,7 +1376,7 @@ Hl0:
     call WriteString
 Draw1:
     mov dl, 49
-    mov dh, 22
+    mov dh, 21
     call Gotoxy
     cmp MenuSelection, 1
     je Hl1
@@ -1344,7 +1392,7 @@ Hl1:
     call WriteString
 Draw2:
     mov dl, 49
-    mov dh, 23
+    mov dh, 22
     call Gotoxy
     cmp MenuSelection, 2
     je Hl2
@@ -1360,7 +1408,7 @@ Hl2:
     call WriteString
 Draw3:
     mov dl, 49
-    mov dh, 24
+    mov dh, 23
     call Gotoxy
     cmp MenuSelection, 3
     je Hl3
@@ -1376,7 +1424,7 @@ Hl3:
     call WriteString
 DnMenu:
     mov dl, 49
-    mov dh, 25
+    mov dh, 24
     call Gotoxy
     cmp MenuSelection, 4
     je Hl4
@@ -1398,7 +1446,7 @@ DrawFooter PROC
     mov eax, gray + (black * 16)
     call SetTextColor
     mov dl, 38
-    mov dh, 26
+    mov dh, 27
     call Gotoxy
     mov edx, OFFSET strFooter
     call WriteString
