@@ -19,4 +19,24 @@
       <Filter>Source Files</Filter>
     </MASM>
   </ItemGroup>
+  <ItemGroup>
+    <Media Include="coin.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="funny.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="lvl1.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="menu.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="start.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+    <Media Include="start_mario.wav">
+      <Filter>Resource Files</Filter>
+    </Media>
+  </ItemGroup>
 </Project>

@@ -10,10 +10,11 @@ INCLUDELIB winmm.lib
 ; =======================================================
 PlaySound PROTO STDCALL :PTR BYTE, :DWORD, :DWORD
 
-SND_SYNC    EQU 0h      ; Play and WAIT until finished
-SND_ASYNC   EQU 1h      ; Play in background
-SND_LOOP    EQU 8h      ; Loop the sound
-SND_PURGE   EQU 40h     ; Stop playback
+SND_SYNC     EQU 0h      ; Play and WAIT
+SND_ASYNC    EQU 1h      ; Play in background
+SND_LOOP     EQU 8h      ; Loop the sound
+SND_PURGE    EQU 40h     ; Stop playback
+SND_FILENAME EQU 20000h  ; <--- CRITICAL ADDITION: Tells Windows its a file!
 
 ; =======================================================
 ; DATA SECTION
@@ -27,7 +28,7 @@ SND_PURGE   EQU 40h     ; Stop playback
     
     ; --- Audio Files ---
     fileMenu        BYTE "menu.wav", 0
-    fileSelect      BYTE "select.wav", 0    ; The "Ting"
+    fileSelect      BYTE "coin.wav", 0    ; The "Ting"
     fileStart       BYTE "start.wav", 0     ; 4-second transition
     isMusicOn       BYTE 1                  ; 1 = ON, 0 = OFF
     
@@ -131,8 +132,8 @@ StartGameSequence:
     
     ; 2. Play Start Sound (SYNC - Waits for 4 seconds)
     ; This acts as the "Loading" phase
-    INVOKE PlaySound, OFFSET fileStart, NULL, SND_SYNC
-    
+    INVOKE PlaySound, OFFSET fileStart, NULL, SND_FILENAME OR SND_SYNC    
+
     ; 3. Jump to Game (Placeholder for now)
     call Clrscr
     mov dl, 30
@@ -148,15 +149,19 @@ StartGameSequence:
     jmp MenuLoop
 
 GoToLeaderboard:
-    call PlaySelectSound
-    call LeaderboardScreen  ; Go to sub-loop
-    call DrawFullMenu       ; Redraw when returned
+    call PlaySelectSound    
+    call LeaderboardScreen  
+    call StartMenuMusic     
+    
+    call DrawFullMenu       
     jmp MenuLoop
 
 GoToSettings:
-    call PlaySelectSound
-    call SettingsScreen     ; Go to sub-loop
-    call DrawFullMenu       ; Redraw when returned
+    call PlaySelectSound    
+    call SettingsScreen     
+    call StartMenuMusic     
+    
+    call DrawFullMenu       
     jmp MenuLoop
 
 ExitGame:
@@ -281,7 +286,8 @@ SettingsScreen ENDP
 StartMenuMusic PROC
     cmp isMusicOn, 1
     jne SkipMusic
-    INVOKE PlaySound, OFFSET fileMenu, NULL, SND_ASYNC OR SND_LOOP
+    ; FILENAME + ASYNC + LOOP
+    INVOKE PlaySound, OFFSET fileMenu, NULL, SND_FILENAME OR SND_ASYNC OR SND_LOOP
 SkipMusic:
     ret
 StartMenuMusic ENDP
@@ -289,14 +295,8 @@ StartMenuMusic ENDP
 PlaySelectSound PROC
     cmp isMusicOn, 1
     jne SkipSelect
-    ; Note: SND_ASYNC will cut off BG music temporarily if not handled multithreaded, 
-    ; but in Irvine/MASM single thread, this is expected behavior.
-    ; Ideally, we rely on BG music restarting or being negligible for short clips.
-    ; However, for a simple menu ting, we play ASYNC.
-    INVOKE PlaySound, OFFSET fileSelect, NULL, SND_ASYNC
-    
-    ; OPTIONAL: If you want BG music to resume immediately after ting, 
-    ; you would need complex logic. For now, let's keep the ting simple.
+    ; FILENAME + ASYNC
+    INVOKE PlaySound, OFFSET fileSelect, NULL, SND_FILENAME OR SND_ASYNC
 SkipSelect:
     ret
 PlaySelectSound ENDP

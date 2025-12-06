@@ -21,6 +21,14 @@
   <ItemGroup>
     <MASM Include="main.asm" />
   </ItemGroup>
+  <ItemGroup>
+    <Media Include="coin.wav" />
+    <Media Include="funny.wav" />
+    <Media Include="lvl1.wav" />
+    <Media Include="menu.wav" />
+    <Media Include="start.wav" />
+    <Media Include="start_mario.wav" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
