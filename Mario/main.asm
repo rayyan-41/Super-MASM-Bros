@@ -19,9 +19,8 @@ SND_FILENAME EQU 20000h
 SND_NOSTOP   EQU 10h
 
 GRAVITY      EQU 1
-JUMP_FORCE   EQU -3      
-FRAME_DELAY  EQU 50
-FRAME_DELAY_SNOW EQU 80
+JUMP_FORCE   EQU -5  
+FRAME_DELAY  EQU 60
 SCREEN_WIDTH EQU 120
 MAX_ENEMIES  EQU 10
 
@@ -52,6 +51,7 @@ VK_ESCAPE    EQU 1Bh
     
     CurrentScreen   BYTE 0      
     IsGameActive    BYTE 0
+    GameWon         BYTE 0
     CoinsCollected  DWORD 0
     MenuSelection   BYTE 0
     PlayerLives     BYTE 3
@@ -90,22 +90,15 @@ VK_ESCAPE    EQU 1Bh
     FireballOldX    BYTE 0
     FireballOldY    BYTE 0
     
-    ; --- Snowflakes ---
-    MAX_SNOWFLAKES  EQU 30
-    SnowX           BYTE 30 DUP(0)
-    SnowY           BYTE 30 DUP(0)
-    SnowOldX        BYTE 30 DUP(0)
-    SnowOldY        BYTE 30 DUP(0)
-    SnowActive      BYTE 30 DUP(0)
-    SnowTimer       DWORD 0
-    
     ; --- UI Strings ---
     strCoins        BYTE "COINS: ", 0
     strLives        BYTE "LIVES: ", 0
     strLevelInfo    BYTE "WORLD 1-1", 0
     strLevelInfo2   BYTE "WORLD 1-2", 0
+    strLevelInfo3   BYTE "WORLD 1-3", 0
     strWin          BYTE "LEVEL 1 COMPLETED!", 0
     strScoreSaved   BYTE "SCORE SAVED!", 0
+    strPressAnyKey  BYTE "Press any key to continue...", 0
     strGameOver     BYTE "GAME OVER!", 0
     strFooter       BYTE "A product of Rayyan's Emporium | 24I-0767", 0
     
@@ -113,7 +106,8 @@ VK_ESCAPE    EQU 1Bh
     strOpt0         BYTE "     BEGIN GAME      ", 0
     strOpt1         BYTE "     LEADERBOARD     ", 0
     strOpt2         BYTE "     SETTINGS        ", 0
-    strOpt3         BYTE "     EXIT            ", 0
+    strOpt3         BYTE "     INSTRUCTIONS    ", 0
+    strOpt4         BYTE "     EXIT            ", 0
 
     strSetTitle     BYTE "--- SETTINGS ---", 0
     strSetMusicOn   BYTE "MUSIC: [ ON  ]", 0
@@ -122,6 +116,17 @@ VK_ESCAPE    EQU 1Bh
     strLeaderTitle  BYTE "--- HIGH SCORES ---", 0
     strLead1        BYTE "1. RAYYAN ..... 999999", 0
     strLead2        BYTE "2. MARIO ...... 050000", 0
+
+    ; --- Instructions strings ---
+    strInstTitle    BYTE "--- INSTRUCTIONS ---", 0
+    strInst1        BYTE "MOVE LEFT:  A or LEFT ARROW", 0
+    strInst2        BYTE "MOVE RIGHT: D or RIGHT ARROW", 0
+    strInst3        BYTE "JUMP:       W, UP ARROW, or SPACE", 0
+    strInst4        BYTE "SHOOT:      S", 0
+    strInst5        BYTE "PAUSE/MENU: ESC", 0
+    strInst6        BYTE "COLLECT COINS (O) TO SCORE!", 0
+    strInst7        BYTE "AVOID GOOMBAS (G) OR JUMP ON THEM!", 0
+    strInst8        BYTE "REACH THE FLAG (F) TO WIN!", 0
 
     MasmColors      DWORD yellow, lightRed, lightBlue, lightGreen, lightMagenta, cyan
     MasmColorCount  = 6
@@ -141,61 +146,89 @@ VK_ESCAPE    EQU 1Bh
     MapO    BYTE 0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1, 1,0,0,0,1, 0,1,1,1,0
 
 ; =======================================================
-; LEVEL DATA (120 Cols x 25 Rows)
+; LEVEL DATA (120 Cols Wide) - 3 SCREENS
 ; =======================================================
 Level1_Screen1 LABEL BYTE
-BYTE "         CCC                      CC                       CCC                    CCC                                   "
-BYTE "        CCCCC                    CCCC                     CCCCC                  CCCCC                                  "
-BYTE "       CCCCCCC                  CCCCCC                   CCCCCCC                CCCCCCC                 CCC             "
-BYTE "      CCCCCCCCC                CCCCCCCC                 CCCCCCCCC              CCCCCCCCC               CCCCC            "
-BYTE "     CCCCCCCCCCC              CCCCCCCCCC               CCCCCCCCCCC            CCCCCCCCCCC             CCCCCCC           "
-BYTE "                                                                                                     CCCCCCCCC          "
-BYTE "                                                                                                    CCCCCCCCCCC         "
-BYTE "                                                                                                                        "
-BYTE "                                                                                    QQQ                                 "
-BYTE "                                                                                    QQQ                                 "
-BYTE "                                                                                                                        "
-BYTE "                       cccc                                                                                             "
-BYTE "                       PPPP                                                       ccSSSSS                               "
-BYTE "                       PPPP                                      cccc   ccccc    cSSSSSSS                               "
-BYTE "                cccc   PPPP                  ccccc               BBBB   BBBBB   cSSSSSSSS                               "
-BYTE "                PPPP   PPPP   cccc           BBBBB               BBBB   BBBBB  ccSSSSSSSS          PPP                  "
-BYTE "                PPPP   PPPP   PPPP                                            cSSSSSSSSSS          PPP                  "
-BYTE "                PPPP   PPPP   PPPP                                          ccSSSSSSSSSSS          PPP   PPP            "
-BYTE "                PPPP   PPPP   PPPP                                         cSSSSSSSSSSSSS          PPP   PPP            "
-BYTE "                PPPP   PPPP   PPPP                                        cSSSSSSSSSSSSSS          PPP   PPP            "
-BYTE "                PPPP   PPPP   PPPP        G                              cSSSSSSSSSSSSSSS     G    PPP   PPP            "
+BYTE "                    CC                                               CCC                                                "
+BYTE "                   CCCC         CCC                                 CCCCC                                               "
+BYTE "        CC        CCCCCC       CCCCC              C                CCCCCCC                             CCC              "
+BYTE "       CCCC                                      CCC              CCCCCCCCC                           CCCCC             "
+BYTE "      CCCCCC                                    CCCCC            CCCCCCCCCCC                         CCCCCCCC           "
+BYTE "                                               CCCCCCC          CCCCCCCCCCCCC                       CCCCCCCCCC          "
+BYTE "                                                                                                   CCCCCCCCCCCC         "
+BYTE "                                                                                                  CCCCCCCCCCCCCC        "
+BYTE "                                                                                                 CCCCCCCCCCCCCCCC       "
+BYTE "                        cccc                                                                    CCCCCCCCCCCCCCCCCC      "
+BYTE "                        PPPP                                                                                            "
+BYTE "                        PPPP      cccc                                                                                  "
+BYTE "                 cccc   PPPP      BBBB                                                     cccc                         "
+BYTE "                 PPPP   PPPP      BBBB                                                     BBBB                         "
+BYTE "                 PPPP   PPPP             cccc                                              BBBB                         "
+BYTE "          cccc   PPPP   PPPP             BBBB                 QQQQ        QQQQQ    cccc                                 "
+BYTE "          PPPP   PPPP   PPPP             BBBB          PPPP   QQQQ        QQQQQ    BBBB                                 "
+BYTE "          PPPP   PPPP   PPPP                           PPPP                        BBBB                                 "
+BYTE "          PPPP   PPPP   PPPP                           PPPP                                                             "
+BYTE "          PPPP   PPPP   PPPP                           PPPP                                                             "
+BYTE "          PPPP   PPPP   PPPP   cccccc         ccccccc  PPPP                                                             "
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 
 Level1_Screen2 LABEL BYTE
-BYTE "                                                                                                               TTTT     "
-BYTE "                                                                                                             TTTTTT     "
-BYTE "                                                                                                            TTTTTTT     "
-BYTE "                                                                                                           TTTTTTTT     "
-BYTE "                                                                                                          TTTTTTTTT     "
-BYTE "                                                                                                         TTTTTTTTTT     "
-BYTE "                                                                                                                 FF     "
-BYTE "                                                                                                                 FF     "
-BYTE "                                                                                                                 FF     "
-BYTE "                                                                                                                 FF     "
-BYTE "                      ccc                                                                                        FF     "
-BYTE "                   cccSSS                                                     cccc                               FF     "
-BYTE "                  cSSSSSS    ccccc                                            PPPP                               FF     "
-BYTE "                ccSSSSSSS    BBBBB                                     cccc   PPPP   cccc                        FF     "
-BYTE "              ccSSSSSSSSS    BBBBB                                     PPPP   PPPP   BBBB                        FF     "
-BYTE "            ccSSSSSSSSSSS           cccc                               PPPP   PPPP   BBBB                        FF     "
-BYTE "           cSSSSSSSSSSSSS           BBBB         QQQQ    QQQQ          PPPP   PPPP          cccc               FFFFF    "
-BYTE "         ccSSSSSSSSSSSSSS           BBBB         QQQQ    QQQQ          PPPP   PPPP          BBBB              FFFFFFF   "
-BYTE "        cSSSSSSSSSSSSSSSS                                              PPPP   PPPP          BBBB             FFFFFFFFF  "
-BYTE "      ccSSSSSSSSSSSSSSSSS                                              PPPP   PPPP                          FFFFFFFFFFF "
-BYTE "      SSSSSSSSSSSSSSSSSSS        G                                     PPPP   PPPP     G                   FFFFFFFFFFFFF"
+BYTE "                   CC                                 CCC                                    CCCCC                      "
+BYTE "                 CCCCC                              CCCCCCC                               CCCCCCCCCCC                   "
+BYTE "                CCCCCCC                           CCCCCCCCCC                             CCCCCCCCCCCCC                  "
+BYTE "              CCCCCCCCCC                         CCCCCCCCCCCC                          CCCCCCCCCCCCCCCC                 "
+BYTE "           CCCCCCCCCCCCCC                                                             CCCCCCCCCCCCCCCCCCCC              "
+BYTE "                                                                                     CCCCCCCCCCCCCCCCCCCCCC             "
+BYTE "                                                                                                                        "
+BYTE "                                                                                                                        "
+BYTE "                                                                                                                        "
+BYTE "                                                                                                                        "
+BYTE "                                                                                                                        "
+BYTE "                                                                                  cccc                                  "
+BYTE "        ccccccc                                cSSSSSSSSSSSSSSSc                  PPPP                                  "
+BYTE "        ccccccc          ccccccc              cSSSSSSSSSSSSSSSSSc                 PPPP                                  "
+BYTE "        BBBBBBB          BBBBBBB             cSSSSSSSSSSSSSSSSSSSc                PPPP                                  "
+BYTE "        BBBBBBB   QQQQ   BBBBBBB            cSSSSSSSSSSSSSSSSSSSSSc         cccc  PPPP                                  "
+BYTE "        BBBBBBB   QQQQ   BBBBBBB           cSSSSSSSSSSSSSSSSSSSSSSSc        PPPP  PPPP   cccc                           "
+BYTE "                                          cSSSSSSSSSSSSSSSSSSSSSSSSSc       PPPP  PPPP   PPPP                           "
+BYTE "                                         cSSSSSSSSSSSSSSSSSSSSSSSSSSSc      PPPP  PPPP   PPPP                           "
+BYTE "                                        cSSSSSSSSSSSSSSSSSSSSSSSSSSSSSc     PPPP  PPPP   PPPP                           "
+BYTE "                                       cSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSc    PPPP  PPPP   PPPP                           "
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
 BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
+Level1_Screen3 LABEL BYTE
+BYTE "                                                                                                                   TTT  "
+BYTE "                          CCC                                                                                     TTTT  "
+BYTE "                         CCCCC                                    CCC                                            TTTTT  "
+BYTE "                        CCCCCCC                                  CCCCC                                          TTTTTT  "
+BYTE "       CCC             CCCCCCCCC                                CCCCCCC                                BBBB    TTTTTTT  "
+BYTE "      CCCCC                                    cccccc       QQQQ              QQQQ                     BBBB   TTTTTTTT  "
+BYTE "     CCCCCCC                                   BBBBBB       QQQQ              QQQQ           BBBBB            TTTTTTTT  "
+BYTE "                                               BBBBBB                                        BBBBB                 FF   "
+BYTE "                                               BBBBBB                                                              FF   "
+BYTE "                                                                       QQQQ          cccc                          FF   "
+BYTE "                                    ccccccc                            QQQQ          PPPP                          FF   "
+BYTE "                                    BBBBBBB                                          PPPP                          FF   "
+BYTE "                   ccccc            BBBBBBB                cccccc             cccc   PPPP                          FF   "
+BYTE "                   BBBBB            BBBBBBB                BBBBBB             PPPP   PPPP                          FF   "
+BYTE "                   BBBBB                                   BBBBBB             PPPP   PPPP                          FF   "
+BYTE "                                                ccccc      BBBBBB      cccc   PPPP   PPPP                          FF   "
+BYTE "                          cccccc                BBBBB                  PPPP   PPPP   PPPP                          FF   "
+BYTE "                          BBBBBB                BBBBB                  PPPP   PPPP   PPPP                          FF   "
+BYTE "                          BBBBBB                BBBBB                  PPPP   PPPP   PPPP                        FFFFFF "
+BYTE "                                                                       PPPP   PPPP   PPPP                       FFFFFFFF"
+BYTE "                  cccc                                                 PPPP   PPPP   PPPP                      FFFFFFFFF"
+BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+BYTE "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+
 
 ; =======================================================
 ; CODE SECTION
@@ -232,11 +265,11 @@ CursorUp:
     dec MenuSelection
     jmp RedrawOptions
 WrapBottom:
-    mov MenuSelection, 3
+    mov MenuSelection, 4
     jmp RedrawOptions
 
 CursorDown:
-    cmp MenuSelection, 3
+    cmp MenuSelection, 4
     je WrapTop
     inc MenuSelection
     jmp RedrawOptions
@@ -257,6 +290,8 @@ HandleSelection:
     cmp MenuSelection, 2
     je GoToSettings
     cmp MenuSelection, 3
+    je GoToInstructions
+    cmp MenuSelection, 4
     je ExitGame
     jmp CheckMenuTimer
 
@@ -269,7 +304,7 @@ CheckMenuTimer:
     call GetMseconds
     mov LastTimer, eax
     mov dl, 41
-    mov dh, 9
+    mov dh, 8
     call DrawTitleMasm
     mov dl, 0
     mov dh, 0
@@ -288,13 +323,18 @@ GoToSettings:
     call DrawFullMenu
     jmp MenuLoop
 
+GoToInstructions:
+    call InstructionsScreen
+    call StartMenuMusic
+    call DrawFullMenu
+    jmp MenuLoop
+
 ; =======================================================
 ; GAME LOGIC
 ; =======================================================
 StartGameSequence:
-    INVOKE PlaySound, NULL, 0, SND_PURGE
+    INVOKE PlaySound, OFFSET fileStart, NULL, SND_FILENAME OR SND_ASYNC
     
-    ; Ask for player name
     call Clrscr
     mov dl, 45
     mov dh, 12
@@ -302,13 +342,11 @@ StartGameSequence:
     mov edx, OFFSET strEnterName
     call WriteString
     
-    ; Read player name
     mov edx, OFFSET PlayerName
     mov ecx, 15
     call ReadString
     
-    ; Play mario.wav when level starts
-    INVOKE PlaySound, OFFSET fileMario, NULL, SND_FILENAME OR SND_SYNC
+    INVOKE PlaySound, OFFSET fileMario, NULL, SND_FILENAME OR SND_ASYNC
     
     mov CurrentScreen, 0
     mov MarioX, 5
@@ -319,9 +357,9 @@ StartGameSequence:
     mov IsGameActive, 1
     mov IsJumping, 0
     mov FireballActive, 0
+    mov GameWon, 0
     
     call InitEnemies
-    call InitSnowflakes
     call RenderLevelFromMap
     call DrawMarioChar
     call StartLevelMusic
@@ -330,29 +368,18 @@ StartGameSequence:
     mov PhysicsTimer, eax
 
 GameLoop:
-    ; Frame timing - slower on snow level (Screen 2)
     call GetMseconds
     sub  eax, PhysicsTimer
-    cmp CurrentScreen, 1
-    je CheckSnowDelay
     cmp  eax, FRAME_DELAY
     jb   GameLoop
-    jmp FrameReady
-CheckSnowDelay:
-    cmp  eax, FRAME_DELAY_SNOW
-    jb   GameLoop
-FrameReady:
+    
     call GetMseconds
     mov PhysicsTimer, eax
     
-    ; --- ASYNC INPUT (simultaneous key detection) ---
-    
-    ; Check ESC
     INVOKE GetAsyncKeyState, VK_ESCAPE
     test eax, 8000h
     jnz ReturnToMenu
     
-    ; Check Left (A or Left Arrow)
     INVOKE GetAsyncKeyState, VK_A
     test eax, 8000h
     jnz DoMoveLeft
@@ -374,7 +401,6 @@ DoMoveLeft:
     dec MarioX
 
 CheckRight:
-    ; Check Right (D or Right Arrow)
     INVOKE GetAsyncKeyState, VK_D
     test eax, 8000h
     jnz DoMoveRight
@@ -398,16 +424,28 @@ DoMoveRight:
 
 CheckTransition:
     cmp CurrentScreen, 0
-    jne CheckJumpKey
+    je TransitionTo1
+    cmp CurrentScreen, 1
+    je TransitionTo2
+    jmp CheckJumpKey
+
+TransitionTo1:
     mov CurrentScreen, 1
     mov MarioX, 2
     call InitEnemies
-    call InitSnowflakes
     call RenderLevelFromMap
     call DrawMarioChar
+    jmp CheckJumpKey
+
+TransitionTo2:
+    mov CurrentScreen, 2
+    mov MarioX, 2
+    call InitEnemies
+    call RenderLevelFromMap
+    call DrawMarioChar
+    jmp CheckJumpKey
 
 CheckJumpKey:
-    ; Check Jump (W or Up or Space)
     INVOKE GetAsyncKeyState, VK_W
     test eax, 8000h
     jnz DoJump
@@ -432,7 +470,6 @@ DoJump:
     mov IsJumping, 1
 
 CheckShootKey:
-    ; Check Shoot (S)
     INVOKE GetAsyncKeyState, VK_S
     test eax, 8000h
     jnz DoShoot
@@ -453,32 +490,74 @@ DoShoot:
     mov FireballOldY, al
 
 CheckFunnyKey:
-    ; Check P for funny sound
     INVOKE GetAsyncKeyState, VK_P
     test eax, 8000h
     jnz PlayFunny
     jmp PhysicsUpdate
 
 PlayFunny:
-    ; Play funny sound synchronously, then resume background music
     INVOKE PlaySound, OFFSET fileFunny, NULL, SND_FILENAME OR SND_SYNC
     call StartLevelMusic
 
 PhysicsUpdate:
-    ; Drain keyboard buffer
     call ReadKey
     
     call ApplyGravityIterative
     call UpdateEnemies
     call UpdateFireball
-    call UpdateSnowflakes
     call CheckCollisions
     call DrawMarioChar
     call DrawEnemies
     call DrawFireball
-    call DrawSnowflakes
+    
+    ; Check if player won
+    cmp GameWon, 1
+    je ShowWinScreen
     
     jmp GameLoop
+
+ShowWinScreen:
+    mov GameWon, 0
+    call SaveHighScore
+    INVOKE PlaySound, NULL, 0, SND_PURGE
+    call Clrscr
+    
+    ; Set black background
+    mov eax, white + (black * 16)
+    call SetTextColor
+    
+    mov dl, 50
+    mov dh, 10
+    call Gotoxy
+    mov edx, OFFSET strWin
+    call WriteString
+    
+    mov dl, 53
+    mov dh, 12
+    call Gotoxy
+    mov edx, OFFSET strScoreSaved
+    call WriteString
+    
+    ; Show coins collected
+    mov dl, 52
+    mov dh, 14
+    call Gotoxy
+    mov edx, OFFSET strCoins
+    call WriteString
+    mov eax, CoinsCollected
+    call WriteDec
+    
+    mov dl, 45
+    mov dh, 18
+    call Gotoxy
+    mov edx, OFFSET strPressAnyKey
+    call WriteString
+    
+    ; Wait for any key
+    call ReadChar
+    
+    ; Return to menu
+    jmp ReturnToMenu
 
 ReturnToMenu:
     mov IsGameActive, 0
@@ -494,7 +573,6 @@ main ENDP
 ; ENEMY SYSTEM
 ; =======================================================
 InitEnemies PROC USES eax ecx esi edi ebx edx
-    ; Clear all enemies
     mov ecx, MAX_ENEMIES
     mov edi, 0
 ClearLoop:
@@ -502,28 +580,29 @@ ClearLoop:
     inc edi
     loop ClearLoop
     
-    ; Scan level for 'G' characters
     cmp CurrentScreen, 0
     je InitMap1
+    cmp CurrentScreen, 1
+    je InitMap2
+    mov esi, OFFSET Level1_Screen3
+    jmp ScanLevel
+InitMap2:
     mov esi, OFFSET Level1_Screen2
     jmp ScanLevel
 InitMap1:
     mov esi, OFFSET Level1_Screen1
 
 ScanLevel:
-    mov dh, 0           ; Row
-    mov bl, 0           ; Enemy count
+    mov dh, 0
+    mov bl, 0
 ScanRow:
-    mov dl, 0           ; Column
+    mov dl, 0
 ScanCol:
     mov al, [esi]
     cmp al, 'G'
     jne NextCell
-    
-    ; Found enemy, initialize it
     cmp bl, MAX_ENEMIES
     jae NextCell
-    
     movzx edi, bl
     mov EnemyPosX[edi], dl
     mov EnemyPosY[edi], dh
@@ -531,33 +610,25 @@ ScanCol:
     mov EnemyActive[edi], 1
     mov EnemyOldX[edi], dl
     mov EnemyOldY[edi], dh
-    
-    ; Remove 'G' from map
     mov byte ptr [esi], ' '
     inc bl
-
 NextCell:
     inc esi
     inc dl
     cmp dl, 120
     jl ScanCol
-    
     inc dh
     cmp dh, 25
     jl ScanRow
-    
     ret
 InitEnemies ENDP
 
 UpdateEnemies PROC USES eax ebx ecx edx esi edi
     mov ecx, MAX_ENEMIES
     mov edi, 0
-    
 UpdateLoop:
     cmp EnemyActive[edi], 0
     je NextEnemy
-    
-    ; Erase old position
     push ecx
     push edi
     mov eax, lightBlue + (lightBlue * 16)
@@ -569,19 +640,13 @@ UpdateLoop:
     call WriteChar
     pop edi
     pop ecx
-    
-    ; Calculate new position
     mov al, EnemyPosX[edi]
     mov ah, EnemyDirX[edi]
     add al, ah
-    
-    ; Check bounds
     cmp al, 1
     jbe ReverseDir
     cmp al, 118
     jae ReverseDir
-    
-    ; Check collision with block
     push ecx
     push edi
     mov ah, EnemyPosY[edi]
@@ -590,8 +655,6 @@ UpdateLoop:
     pop ecx
     cmp al, 1
     je ReverseDir
-    
-    ; Check if ground ahead
     push ecx
     push edi
     mov al, EnemyPosX[edi]
@@ -604,20 +667,15 @@ UpdateLoop:
     pop ecx
     cmp al, 0
     je ReverseDir
-    
-    ; Move enemy
     mov al, EnemyPosX[edi]
     mov EnemyOldX[edi], al
     mov al, EnemyPosY[edi]
     mov EnemyOldY[edi], al
-    
     mov al, EnemyDirX[edi]
     add EnemyPosX[edi], al
     jmp NextEnemy
-
 ReverseDir:
     neg EnemyDirX[edi]
-
 NextEnemy:
     inc edi
     dec ecx
@@ -628,11 +686,9 @@ UpdateEnemies ENDP
 DrawEnemies PROC USES eax ecx edx edi
     mov ecx, MAX_ENEMIES
     mov edi, 0
-    
 DrawLoop:
     cmp EnemyActive[edi], 0
     je SkipDraw
-    
     mov eax, brown + (lightBlue * 16)
     call SetTextColor
     mov dl, EnemyPosX[edi]
@@ -640,20 +696,15 @@ DrawLoop:
     call Gotoxy
     mov al, 'G'
     call WriteChar
-
 SkipDraw:
     inc edi
     loop DrawLoop
     ret
 DrawEnemies ENDP
 
-; =======================================================
-; FIREBALL SYSTEM
-; =======================================================
 UpdateFireball PROC USES eax ebx esi edx
     cmp FireballActive, 0
     je FBDone
-    
     mov eax, lightBlue + (lightBlue * 16)
     call SetTextColor
     mov dl, FireballOldX
@@ -661,23 +712,19 @@ UpdateFireball PROC USES eax ebx esi edx
     call Gotoxy
     mov al, ' '
     call WriteChar
-    
     mov al, FireballPosX
     mov FireballOldX, al
     mov al, FireballPosY
     mov FireballOldY, al
     inc FireballPosX
-    
     cmp FireballPosX, 119
     jae DeactivateFB
-    
     mov al, FireballPosX
     mov ah, FireballPosY
     call IsSolidTile
     cmp al, 1
     je HitBlock
     jmp FBDone
-
 HitBlock:
     movzx ebx, FireballPosY
     imul ebx, 120
@@ -685,6 +732,11 @@ HitBlock:
     add ebx, eax
     cmp CurrentScreen, 0
     je DestroyM1
+    cmp CurrentScreen, 1
+    je DestroyM2
+    mov esi, OFFSET Level1_Screen3
+    jmp ChkBlk
+DestroyM2:
     mov esi, OFFSET Level1_Screen2
     jmp ChkBlk
 DestroyM1:
@@ -701,7 +753,7 @@ ChkBlk:
     call SetTextColor
     call Gotoxy
     mov al, ' '
-
+    call WriteChar
 DeactivateFB:
     mov FireballActive, 0
 FBDone:
@@ -722,245 +774,12 @@ SkipFB:
     ret
 DrawFireball ENDP
 
-; =======================================================
-; SNOW SYSTEM
-; =======================================================
-InitSnowflakes PROC USES eax ecx edi
-    ; Only initialize if on Screen 2
-    cmp CurrentScreen, 1
-    jne SkipSnowInit
-    
-    mov ecx, 30
-    mov edi, 0
-InitSnowLoop:
-    ; Random X position (1-118)
-    mov eax, 117
-    call RandomRange
-    add al, 1
-    mov SnowX[edi], al
-    ; Random Y position (start at top area)
-    mov eax, 15
-    call RandomRange
-    add al, 3
-    mov SnowY[edi], al
-    mov SnowOldX[edi], 0
-    mov SnowOldY[edi], 0
-    mov SnowActive[edi], 1
-    inc edi
-    loop InitSnowLoop
-SkipSnowInit:
-    ret
-InitSnowflakes ENDP
-
-UpdateSnowflakes PROC USES eax ebx ecx edx edi esi
-    ; Only update snow on Screen 2
-    cmp CurrentScreen, 1
-    jne SkipSnowUpdate
-    
-    mov ecx, 30
-    mov edi, 0
-UpdateSnowLoop:
-    cmp SnowActive[edi], 0
-    je NextSnowflake
-    
-    ; Erase old position
-    push ecx
-    push edi
-    mov dl, SnowOldX[edi]
-    mov dh, SnowOldY[edi]
-    cmp dh, 2
-    jl SkipErase
-    cmp dh, 21
-    jg SkipErase
-    mov eax, lightBlue + (lightBlue * 16)
-    call SetTextColor
-    call Gotoxy
-    mov al, ' '
-    call WriteChar
-SkipErase:
-    pop edi
-    pop ecx
-    
-    ; Save current as old
-    mov al, SnowX[edi]
-    mov SnowOldX[edi], al
-    mov al, SnowY[edi]
-    mov SnowOldY[edi], al
-    
-    ; Calculate next Y position
-    mov al, SnowY[edi]
-    inc al
-    
-    ; Check if next position would hit something
-    push ecx
-    push edi
-    mov ah, al              ; ah = new Y
-    mov al, SnowX[edi]      ; al = current X
-    call IsSnowBlocked
-    pop edi
-    pop ecx
-    cmp al, 1
-    je ResetSnowflake
-    
-    ; Move snowflake down
-    inc SnowY[edi]
-    
-    ; Random horizontal drift
-    mov eax, 3
-    call RandomRange
-    cmp al, 0
-    je DriftLeft
-    cmp al, 1
-    je DriftRight
-    jmp CheckSnowBounds
-DriftLeft:
-    cmp SnowX[edi], 2
-    jbe CheckSnowBounds
-    ; Check if left position is blocked
-    push ecx
-    push edi
-    mov al, SnowX[edi]
-    dec al
-    mov ah, SnowY[edi]
-    call IsSnowBlocked
-    pop edi
-    pop ecx
-    cmp al, 1
-    je CheckSnowBounds
-    dec SnowX[edi]
-    jmp CheckSnowBounds
-DriftRight:
-    cmp SnowX[edi], 117
-    jae CheckSnowBounds
-    ; Check if right position is blocked
-    push ecx
-    push edi
-    mov al, SnowX[edi]
-    inc al
-    mov ah, SnowY[edi]
-    call IsSnowBlocked
-    pop edi
-    pop ecx
-    cmp al, 1
-    je CheckSnowBounds
-    inc SnowX[edi]
-    
-CheckSnowBounds:
-    ; Reset if reached ground level
-    cmp SnowY[edi], 21
-    jb NextSnowflake
-    
-ResetSnowflake:
-    ; Reset to top with new random X
-    mov eax, 116
-    call RandomRange
-    add al, 2
-    mov SnowX[edi], al
-    mov SnowY[edi], 3
-
-NextSnowflake:
-    inc edi
-    dec ecx
-    jnz UpdateSnowLoop
-SkipSnowUpdate:
-    ret
-UpdateSnowflakes ENDP
-
-; Check if snow position is blocked by Mario, structures, etc.
-; Input: AL = X, AH = Y
-; Output: AL = 1 if blocked, 0 if clear
-IsSnowBlocked PROC USES ebx esi edi
-    ; Check bounds
-    cmp ah, 21
-    jge SnowBlocked
-    cmp ah, 2
-    jl SnowBlocked
-    
-    ; Check if hitting Mario
-    cmp al, MarioX
-    jne NotMario
-    cmp ah, MarioY
-    je SnowBlocked
-NotMario:
-    
-    ; Check map tile
-    movzx ebx, ah
-    imul ebx, 120
-    movzx edi, al
-    add ebx, edi
-    mov esi, OFFSET Level1_Screen2
-    add esi, ebx
-    mov al, [esi]
-    
-    ; Check for blocking tiles
-    cmp al, ' '
-    je SnowClear
-    cmp al, 'G'
-    je SnowClear
-    ; Everything else blocks snow
-    jmp SnowBlocked
-    
-SnowClear:
-    mov al, 0
-    ret
-SnowBlocked:
-    mov al, 1
-    ret
-IsSnowBlocked ENDP
-
-DrawSnowflakes PROC USES eax ecx edx edi
-    ; Only draw snow on Screen 2
-    cmp CurrentScreen, 1
-    jne SkipSnowDrawAll
-    
-    mov ecx, 30
-    mov edi, 0
-DrawSnowLoop:
-    cmp SnowActive[edi], 0
-    je SkipSnowDraw
-    
-    mov dh, SnowY[edi]
-    cmp dh, 3
-    jl SkipSnowDraw
-    cmp dh, 21
-    jge SkipSnowDraw
-    
-    ; Don't draw if position is blocked
-    push ecx
-    push edi
-    mov al, SnowX[edi]
-    mov ah, SnowY[edi]
-    call IsSnowBlocked
-    pop edi
-    pop ecx
-    cmp al, 1
-    je SkipSnowDraw
-    
-    mov eax, white + (lightBlue * 16)
-    call SetTextColor
-    mov dl, SnowX[edi]
-    mov dh, SnowY[edi]
-    call Gotoxy
-    mov al, '*'
-    call WriteChar
-
-SkipSnowDraw:
-    inc edi
-    loop DrawSnowLoop
-SkipSnowDrawAll:
-    ret
-DrawSnowflakes ENDP
-
-; =======================================================
-; COLLISION DETECTION
-; =======================================================
 CheckCollisions PROC USES eax ecx edi edx
     mov ecx, MAX_ENEMIES
     mov edi, 0
 ChkLoop:
     cmp EnemyActive[edi], 0
     je NxtChk
-    
     mov al, MarioX
     cmp al, EnemyPosX[edi]
     jne ChkFB
@@ -969,7 +788,6 @@ ChkLoop:
     jne ChkJmpKill
     call MarioDied
     jmp NxtChk
-
 ChkJmpKill:
     mov al, MarioY
     inc al
@@ -986,7 +804,6 @@ ChkJmpKill:
     call WriteChar
     pop edi
     jmp NxtChk
-
 ChkFB:
     cmp FireballActive, 0
     je NxtChk
@@ -998,7 +815,6 @@ ChkFB:
     jne NxtChk
     mov EnemyActive[edi], 0
     mov FireballActive, 0
-
 NxtChk:
     inc edi
     dec ecx
@@ -1016,36 +832,38 @@ MarioDied PROC
     mov IsJumping, 0
     call RenderLevelFromMap
     ret
-
 GameOver:
     call SaveHighScore
     call Clrscr
+    mov eax, white + (black * 16)
+    call SetTextColor
     mov dl, 52
     mov dh, 12
     call Gotoxy
     mov edx, OFFSET strGameOver
     call WriteString
-    mov dl, 48
+    mov dl, 52
     mov dh, 14
     call Gotoxy
     mov edx, OFFSET strCoins
     call WriteString
     mov eax, CoinsCollected
     call WriteDec
-    call WaitMsg
+    mov dl, 45
+    mov dh, 18
+    call Gotoxy
+    mov edx, OFFSET strPressAnyKey
+    call WriteString
+    call ReadChar
     exit
 MarioDied ENDP
 
-; =======================================================
-; HIGH SCORE SYSTEM
-; =======================================================
 SaveHighScore PROC USES eax ebx ecx edx esi edi
     mov edx, OFFSET strHighScore
     call CreateOutputFile
     cmp eax, INVALID_HANDLE_VALUE
     je SaveDone
     mov fileHandle, eax
-    
     mov edi, OFFSET scoreBuffer
     mov esi, OFFSET PlayerName
 CopyName:
@@ -1056,7 +874,6 @@ CopyName:
     inc esi
     inc edi
     jmp CopyName
-
 AddSep:
     mov byte ptr [edi], ' '
     inc edi
@@ -1064,7 +881,6 @@ AddSep:
     inc edi
     mov byte ptr [edi], ' '
     inc edi
-    
     mov eax, CoinsCollected
     mov ebx, 10
     mov ecx, 0
@@ -1075,20 +891,17 @@ ConvLoop:
     inc ecx
     cmp eax, 0
     jne ConvLoop
-
 WriteDigits:
     pop edx
     add dl, '0'
     mov [edi], dl
     inc edi
     loop WriteDigits
-    
     mov byte ptr [edi], 13
     inc edi
     mov byte ptr [edi], 10
     inc edi
     mov byte ptr [edi], 0
-    
     mov esi, OFFSET scoreBuffer
     mov ecx, 0
 CntLen:
@@ -1097,21 +910,16 @@ CntLen:
     inc ecx
     inc esi
     jmp CntLen
-
 DoWrite:
     mov eax, fileHandle
     mov edx, OFFSET scoreBuffer
     call WriteToFile
     mov eax, fileHandle
     call CloseFile
-
 SaveDone:
     ret
 SaveHighScore ENDP
 
-; =======================================================
-; AUDIO
-; =======================================================
 StartMenuMusic PROC
     cmp isMusicOn, 1
     jne SkM
@@ -1133,14 +941,10 @@ PlaySelectSound PROC
 SkS: ret
 PlaySelectSound ENDP
 
-; =======================================================
-; PHYSICS
-; =======================================================
 ApplyGravityIterative PROC
     call EraseMario
     cmp MarioVelY, 0
     je ApplyGravForce
-    
     mov al, MarioVelY
     cmp al, 0
     jg  SetDown
@@ -1151,7 +955,6 @@ ApplyGravityIterative PROC
 SetDown:
     mov StepCount, al
     mov StepDir, 1
-
 LpMove:
     mov ah, MarioY
     add ah, StepDir
@@ -1159,19 +962,16 @@ LpMove:
     jl StopMv
     cmp ah, 23
     jg StopMv
-    
     push eax
     mov al, MarioX
     call IsSolidTile
     cmp al, 1
     pop eax
     je StopMv
-    
     mov MarioY, ah
     dec StepCount
     jnz LpMove
     jmp ApplyGravForce
-
 StopMv:
     cmp StepDir, 1
     jne BonkHd
@@ -1180,7 +980,6 @@ StopMv:
     jmp DoneGrav
 BonkHd:
     mov MarioVelY, 0
-
 ApplyGravForce:
     mov al, MarioX
     mov ah, MarioY
@@ -1192,11 +991,9 @@ ApplyGravForce:
     jge DoneGrav
     inc MarioVelY
     jmp DoneGrav
-
 ResetSt:
     mov MarioVelY, 0
     mov IsJumping, 0
-
 DoneGrav:
     ret
 ApplyGravityIterative ENDP
@@ -1206,52 +1003,47 @@ IsSolidTile PROC USES esi edi ebx
     ja IsSolid_True
     cmp ah, 24
     ja IsSolid_True
-    
     movzx ebx, ah
     imul ebx, 120
     movzx edi, al
     add ebx, edi
-    
     cmp CurrentScreen, 0
     je Map1
+    cmp CurrentScreen, 1
+    je Map2
+    mov esi, OFFSET Level1_Screen3
+    jmp LoadTile
+Map2:
     mov esi, OFFSET Level1_Screen2
     jmp LoadTile
 Map1:
     mov esi, OFFSET Level1_Screen1
-
 LoadTile:
     add esi, ebx
     mov al, [esi]
-    
     cmp al, 'c'
     je CollectCoin
     cmp al, 'F'
     je TriggerWin
-    
     cmp al, ' '
     je IsSolid_False
     cmp al, 'C'
     je IsSolid_False
     cmp al, 'T'
     je IsSolid_False
-    
     mov al, 1
     ret
-
 IsSolid_False:
     mov al, 0
     ret
 IsSolid_True:
     mov al, 1
     ret
-
 CollectCoin:
     mov byte ptr [esi], ' '
     inc CoinsCollected
     push eax
     push edx
-    ; Play coin sound asynchronously (non-blocking)
-    INVOKE PlaySound, OFFSET fileCoin, NULL, SND_FILENAME OR SND_ASYNC
     mov eax, white + (black * 16)
     call SetTextColor
     mov dl, 9
@@ -1263,33 +1055,14 @@ CollectCoin:
     pop eax
     mov al, 0
     ret
-
 TriggerWin:
-    call SaveHighScore
-    INVOKE PlaySound, NULL, 0, SND_PURGE
-    call Clrscr
-    mov dl, 50
-    mov dh, 11
-    call Gotoxy
-    mov edx, OFFSET strWin
-    call WriteString
-    mov dl, 53
-    mov dh, 13
-    call Gotoxy
-    mov edx, OFFSET strScoreSaved
-    call WriteString
-    call WaitMsg
-    ; Exit - user will restart game to play again
-    exit
-
+    mov GameWon, 1
+    mov al, 0
+    ret
 IsSolidTile ENDP
 
-; =======================================================
-; RENDERING
-; =======================================================
 RenderLevelFromMap PROC USES eax ecx edx esi edi
     call Clrscr
-    
     mov eax, white + (black * 16)
     call SetTextColor
     mov dh, 0
@@ -1305,7 +1078,6 @@ HudL: call WriteChar
     inc dh
     pop ecx
     loop HudBG
-    
     mov dl, 2
     mov dh, 0
     call Gotoxy
@@ -1313,19 +1085,22 @@ HudL: call WriteChar
     call WriteString
     mov eax, CoinsCollected
     call WriteDec
-    
     mov dl, 50
     mov dh, 0
     call Gotoxy
     cmp CurrentScreen, 0
     je ShowL1
+    cmp CurrentScreen, 1
+    je ShowL2
+    mov edx, OFFSET strLevelInfo3
+    jmp PrintLvl
+ShowL2:
     mov edx, OFFSET strLevelInfo2
     jmp PrintLvl
 ShowL1:
     mov edx, OFFSET strLevelInfo
 PrintLvl:
     call WriteString
-    
     mov dl, 95
     mov dh, 0
     call Gotoxy
@@ -1333,14 +1108,17 @@ PrintLvl:
     call WriteString
     movzx eax, PlayerLives
     call WriteDec
-    
     cmp CurrentScreen, 0
     je LoadM1
+    cmp CurrentScreen, 1
+    je LoadM2
+    mov esi, OFFSET Level1_Screen3
+    jmp StartP
+LoadM2:
     mov esi, OFFSET Level1_Screen2
     jmp StartP
 LoadM1:
     mov esi, OFFSET Level1_Screen1
-
 StartP:
     mov dh, 0
 RowLoop:
@@ -1350,7 +1128,6 @@ ColLoop:
     mov al, [esi]
     cmp dh, 2
     jl NextT
-    
     cmp al, ' '
     je D_Sky
     cmp al, 'X'
@@ -1372,33 +1149,25 @@ ColLoop:
     cmp al, 'T'
     je D_Top
     jmp NextT
-
 D_Sky:  mov eax, white + (lightBlue*16)
         call SetTextColor
         call Gotoxy
         mov al, ' '
         call WriteChar
         jmp NextT
-D_Gnd:  ; Ground - white on Screen 2 (snow), green on Screen 1
-        cmp CurrentScreen, 1
-        je D_GndSnow
-        mov eax, white + (green*16)
-        jmp D_GndDraw
-D_GndSnow:
-        mov eax, white + (white*16)
-D_GndDraw:
+D_Gnd:  mov eax, white + (green*16)
         call SetTextColor
         call Gotoxy
         mov al, ' '
         call WriteChar
         jmp NextT
-D_Brk:  mov eax, lightRed + (brown*16)
+D_Brk:  mov eax, white + (red*16)
         call SetTextColor
         call Gotoxy
-        mov al, 178
+        mov al, 219
         call WriteChar
         jmp NextT
-D_Que:  mov eax, yellow + (brown*16)
+D_Que:  mov eax, white + (yellow*16)
         call SetTextColor
         call Gotoxy
         mov al, '?'
@@ -1422,25 +1191,24 @@ D_Cld:  mov eax, white + (lightBlue*16)
         mov al, 219
         call WriteChar
         jmp NextT
-D_Str:  mov eax, white + (brown*16)
+D_Str:  mov eax, brown + (brown*16)
         call SetTextColor
         call Gotoxy
-        mov al, 177
+        mov al, 219
         call WriteChar
         jmp NextT
-D_Pol:  mov eax, lightRed + (lightBlue*16)
+D_Pol:  mov eax, gray + (gray*16)
         call SetTextColor
         call Gotoxy
-        mov al, 179
+        mov al, 219
         call WriteChar
         jmp NextT
-D_Top:  mov eax, lightRed + (lightBlue*16)
+D_Top:  mov eax, red + (red*16)
         call SetTextColor
         call Gotoxy
-        mov al, 16
+        mov al, 219
         call WriteChar
         jmp NextT
-
 NextT:
     inc esi
     inc dl
@@ -1449,6 +1217,21 @@ NextT:
     inc dh
     cmp dh, 25
     jl RowLoop
+    mov eax, gray + (black * 16)
+    call SetTextColor
+    mov dl, 0
+    mov dh, 25
+    call Gotoxy
+    mov ecx, 120
+FooterBG:
+    mov al, ' '
+    call WriteChar
+    loop FooterBG
+    mov dl, 38
+    mov dh, 25
+    call Gotoxy
+    mov edx, OFFSET strFooter
+    call WriteString
     ret
 RenderLevelFromMap ENDP
 
@@ -1482,13 +1265,13 @@ DrawFullMenu PROC
     call Clrscr
     call DrawBorder
     mov dl, 35
-    mov dh, 3
+    mov dh, 2
     call DrawTitleSuper
     mov dl, 41
-    mov dh, 9
+    mov dh, 8
     call DrawTitleMasm
     mov dl, 41
-    mov dh, 15
+    mov dh, 14
     call DrawTitleBros
     call DrawMenuText
     call DrawFooter
@@ -1507,12 +1290,12 @@ L1: mov al, 219
     loop L1
     mov ecx, 120
     mov dl, 0
-    mov dh, 24
+    mov dh, 27
     call Gotoxy
 L2: mov al, 219
     call WriteChar
     loop L2
-    mov ecx, 23
+    mov ecx, 26
     mov dh, 1
 L3: mov dl, 0
     call Gotoxy
@@ -1528,9 +1311,8 @@ L3: mov dl, 0
 DrawBorder ENDP
 
 DrawMenuText PROC
-    ; Option 0 - BEGIN GAME
     mov dl, 49
-    mov dh, 19
+    mov dh, 21
     call Gotoxy
     cmp MenuSelection, 0
     je Hl0
@@ -1544,11 +1326,9 @@ Hl0:
     call SetTextColor
     mov edx, OFFSET strOpt0
     call WriteString
-
 Draw1:
-    ; Option 1 - LEADERBOARD
     mov dl, 49
-    mov dh, 20
+    mov dh, 22
     call Gotoxy
     cmp MenuSelection, 1
     je Hl1
@@ -1562,11 +1342,9 @@ Hl1:
     call SetTextColor
     mov edx, OFFSET strOpt1
     call WriteString
-
 Draw2:
-    ; Option 2 - SETTINGS
     mov dl, 49
-    mov dh, 21
+    mov dh, 23
     call Gotoxy
     cmp MenuSelection, 2
     je Hl2
@@ -1580,11 +1358,9 @@ Hl2:
     call SetTextColor
     mov edx, OFFSET strOpt2
     call WriteString
-
 Draw3:
-    ; Option 3 - EXIT
     mov dl, 49
-    mov dh, 22
+    mov dh, 24
     call Gotoxy
     cmp MenuSelection, 3
     je Hl3
@@ -1598,8 +1374,23 @@ Hl3:
     call SetTextColor
     mov edx, OFFSET strOpt3
     call WriteString
-
 DnMenu:
+    mov dl, 49
+    mov dh, 25
+    call Gotoxy
+    cmp MenuSelection, 4
+    je Hl4
+    mov eax, gray + (black * 16)
+    call SetTextColor
+    mov edx, OFFSET strOpt4
+    call WriteString
+    jmp MenuEnd
+Hl4:
+    mov eax, white + (red * 16)
+    call SetTextColor
+    mov edx, OFFSET strOpt4
+    call WriteString
+MenuEnd:
     ret
 DrawMenuText ENDP
 
@@ -1607,7 +1398,7 @@ DrawFooter PROC
     mov eax, gray + (black * 16)
     call SetTextColor
     mov dl, 38
-    mov dh, 23
+    mov dh, 26
     call Gotoxy
     mov edx, OFFSET strFooter
     call WriteString
@@ -1615,8 +1406,6 @@ DrawFooter PROC
 DrawFooter ENDP
 
 SetupScreen PROC
-    ; Using Irvine32 only - no Windows API calls
-    ; Console will use default settings
     ret
 SetupScreen ENDP
 
@@ -1680,7 +1469,7 @@ S_Lp:
 S_Of: mov edx, OFFSET strSetMusicOff
 S_Pr: call WriteString
     mov dl, 45
-    mov dh, 20
+    mov dh, 26
     call Gotoxy
     mov edx, OFFSET strBack
     call WriteString
@@ -1706,6 +1495,70 @@ S_Rt:
     call PlaySelectSound
     ret
 SettingsScreen ENDP
+
+InstructionsScreen PROC
+    call Clrscr
+    mov dl, 50
+    mov dh, 3
+    call Gotoxy
+    mov edx, OFFSET strInstTitle
+    call WriteString
+    mov dl, 45
+    mov dh, 6
+    call Gotoxy
+    mov edx, OFFSET strInst1
+    call WriteString
+    mov dl, 45
+    mov dh, 8
+    call Gotoxy
+    mov edx, OFFSET strInst2
+    call WriteString
+    mov dl, 45
+    mov dh, 10
+    call Gotoxy
+    mov edx, OFFSET strInst3
+    call WriteString
+    mov dl, 45
+    mov dh, 12
+    call Gotoxy
+    mov edx, OFFSET strInst4
+    call WriteString
+    mov dl, 45
+    mov dh, 14
+    call Gotoxy
+    mov edx, OFFSET strInst5
+    call WriteString
+    mov dl, 45
+    mov dh, 17
+    call Gotoxy
+    mov edx, OFFSET strInst6
+    call WriteString
+    mov dl, 45
+    mov dh, 19
+    call Gotoxy
+    mov edx, OFFSET strInst7
+    call WriteString
+    mov dl, 45
+    mov dh, 21
+    call Gotoxy
+    mov edx, OFFSET strInst8
+    call WriteString
+    mov dl, 45
+    mov dh, 24
+    call Gotoxy
+    mov edx, OFFSET strBack
+    call WriteString
+Inst_W:
+    call ReadChar
+    cmp al, 8
+    je Inst_R
+    cmp al, 27
+    je Inst_R
+    jmp Inst_W
+Inst_R:
+    call PlaySelectSound
+    ret
+InstructionsScreen ENDP
 
 DrawTitleSuper PROC
     mov eax, lightRed + (black * 16)
