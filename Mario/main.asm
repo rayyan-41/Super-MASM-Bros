@@ -16,10 +16,12 @@ SND_ASYNC    EQU 1h
 SND_LOOP     EQU 8h
 SND_PURGE    EQU 40h
 SND_FILENAME EQU 20000h
+SND_NOSTOP   EQU 10h
 
 GRAVITY      EQU 1
-JUMP_FORCE   EQU -2      
+JUMP_FORCE   EQU -3      
 FRAME_DELAY  EQU 50
+FRAME_DELAY_SNOW EQU 80
 SCREEN_WIDTH EQU 120
 MAX_ENEMIES  EQU 10
 
@@ -32,6 +34,7 @@ VK_W         EQU 57h
 VK_A         EQU 41h
 VK_S         EQU 53h
 VK_D         EQU 44h
+VK_P         EQU 50h
 VK_ESCAPE    EQU 1Bh
 
 ; =======================================================
@@ -42,7 +45,9 @@ VK_ESCAPE    EQU 1Bh
     fileSelect      BYTE "select.wav", 0
     fileStart       BYTE "start.wav", 0
     fileLvl1        BYTE "lvl1.wav", 0
-    fileCoin        BYTE "coins.wav", 0
+    fileCoin        BYTE "coin.wav", 0
+    fileMario       BYTE "mario.wav", 0
+    fileFunny       BYTE "funny.wav", 0
     isMusicOn       BYTE 1
     
     CurrentScreen   BYTE 0      
@@ -85,20 +90,31 @@ VK_ESCAPE    EQU 1Bh
     FireballOldX    BYTE 0
     FireballOldY    BYTE 0
     
+    ; --- Snowflakes ---
+    MAX_SNOWFLAKES  EQU 30
+    SnowX           BYTE 30 DUP(0)
+    SnowY           BYTE 30 DUP(0)
+    SnowOldX        BYTE 30 DUP(0)
+    SnowOldY        BYTE 30 DUP(0)
+    SnowActive      BYTE 30 DUP(0)
+    SnowTimer       DWORD 0
+    
     ; --- UI Strings ---
     strCoins        BYTE "COINS: ", 0
     strLives        BYTE "LIVES: ", 0
     strLevelInfo    BYTE "WORLD 1-1", 0
     strLevelInfo2   BYTE "WORLD 1-2", 0
-    strWin          BYTE "COURSE CLEAR!", 0
+    strWin          BYTE "LEVEL 1 COMPLETED!", 0
+    strScoreSaved   BYTE "SCORE SAVED!", 0
     strGameOver     BYTE "GAME OVER!", 0
     strFooter       BYTE "A product of Rayyan's Emporium | 24I-0767", 0
     
-    strOpt0         BYTE "BEGIN GAME", 0
-    strOpt1         BYTE "LEADERBOARD", 0
-    strOpt2         BYTE "SETTINGS", 0
-    strOpt3         BYTE "EXIT", 0
-    
+    ; --- Menu option strings with padding for highlight ---
+    strOpt0         BYTE "     BEGIN GAME      ", 0
+    strOpt1         BYTE "     LEADERBOARD     ", 0
+    strOpt2         BYTE "     SETTINGS        ", 0
+    strOpt3         BYTE "     EXIT            ", 0
+
     strSetTitle     BYTE "--- SETTINGS ---", 0
     strSetMusicOn   BYTE "MUSIC: [ ON  ]", 0
     strSetMusicOff  BYTE "MUSIC: [ OFF ]", 0
@@ -211,17 +227,15 @@ HandleArrows:
     jmp CheckMenuTimer
 
 CursorUp:
-    call PlaySelectSound
     cmp MenuSelection, 0
     je WrapBottom
     dec MenuSelection
-     jmp RedrawOptions
+    jmp RedrawOptions
 WrapBottom:
     mov MenuSelection, 3
     jmp RedrawOptions
 
 CursorDown:
-    call PlaySelectSound
     cmp MenuSelection, 3
     je WrapTop
     inc MenuSelection
@@ -254,8 +268,8 @@ CheckMenuTimer:
     call UpdateMasmColor
     call GetMseconds
     mov LastTimer, eax
-    mov dl, 37
-    mov dh, 7
+    mov dl, 41
+    mov dh, 9
     call DrawTitleMasm
     mov dl, 0
     mov dh, 0
@@ -293,8 +307,8 @@ StartGameSequence:
     mov ecx, 15
     call ReadString
     
-    ; Play start sound
-    INVOKE PlaySound, OFFSET fileStart, NULL, SND_FILENAME OR SND_SYNC
+    ; Play mario.wav when level starts
+    INVOKE PlaySound, OFFSET fileMario, NULL, SND_FILENAME OR SND_SYNC
     
     mov CurrentScreen, 0
     mov MarioX, 5
@@ -307,6 +321,7 @@ StartGameSequence:
     mov FireballActive, 0
     
     call InitEnemies
+    call InitSnowflakes
     call RenderLevelFromMap
     call DrawMarioChar
     call StartLevelMusic
@@ -315,12 +330,18 @@ StartGameSequence:
     mov PhysicsTimer, eax
 
 GameLoop:
-    ; Frame timing first
+    ; Frame timing - slower on snow level (Screen 2)
     call GetMseconds
     sub  eax, PhysicsTimer
+    cmp CurrentScreen, 1
+    je CheckSnowDelay
     cmp  eax, FRAME_DELAY
     jb   GameLoop
-    
+    jmp FrameReady
+CheckSnowDelay:
+    cmp  eax, FRAME_DELAY_SNOW
+    jb   GameLoop
+FrameReady:
     call GetMseconds
     mov PhysicsTimer, eax
     
@@ -381,6 +402,7 @@ CheckTransition:
     mov CurrentScreen, 1
     mov MarioX, 2
     call InitEnemies
+    call InitSnowflakes
     call RenderLevelFromMap
     call DrawMarioChar
 
@@ -414,11 +436,11 @@ CheckShootKey:
     INVOKE GetAsyncKeyState, VK_S
     test eax, 8000h
     jnz DoShoot
-    jmp PhysicsUpdate
+    jmp CheckFunnyKey
 
 DoShoot:
     cmp FireballActive, 0
-    jne PhysicsUpdate
+    jne CheckFunnyKey
     mov al, MarioX
     inc al
     mov FireballPosX, al
@@ -430,6 +452,18 @@ DoShoot:
     mov al, FireballPosY
     mov FireballOldY, al
 
+CheckFunnyKey:
+    ; Check P for funny sound
+    INVOKE GetAsyncKeyState, VK_P
+    test eax, 8000h
+    jnz PlayFunny
+    jmp PhysicsUpdate
+
+PlayFunny:
+    ; Play funny sound synchronously, then resume background music
+    INVOKE PlaySound, OFFSET fileFunny, NULL, SND_FILENAME OR SND_SYNC
+    call StartLevelMusic
+
 PhysicsUpdate:
     ; Drain keyboard buffer
     call ReadKey
@@ -437,10 +471,13 @@ PhysicsUpdate:
     call ApplyGravityIterative
     call UpdateEnemies
     call UpdateFireball
+    call UpdateSnowflakes
     call CheckCollisions
     call DrawMarioChar
     call DrawEnemies
     call DrawFireball
+    call DrawSnowflakes
+    
     jmp GameLoop
 
 ReturnToMenu:
@@ -664,7 +701,6 @@ ChkBlk:
     call SetTextColor
     call Gotoxy
     mov al, ' '
-    call WriteChar
 
 DeactivateFB:
     mov FireballActive, 0
@@ -685,6 +721,235 @@ DrawFireball PROC
 SkipFB:
     ret
 DrawFireball ENDP
+
+; =======================================================
+; SNOW SYSTEM
+; =======================================================
+InitSnowflakes PROC USES eax ecx edi
+    ; Only initialize if on Screen 2
+    cmp CurrentScreen, 1
+    jne SkipSnowInit
+    
+    mov ecx, 30
+    mov edi, 0
+InitSnowLoop:
+    ; Random X position (1-118)
+    mov eax, 117
+    call RandomRange
+    add al, 1
+    mov SnowX[edi], al
+    ; Random Y position (start at top area)
+    mov eax, 15
+    call RandomRange
+    add al, 3
+    mov SnowY[edi], al
+    mov SnowOldX[edi], 0
+    mov SnowOldY[edi], 0
+    mov SnowActive[edi], 1
+    inc edi
+    loop InitSnowLoop
+SkipSnowInit:
+    ret
+InitSnowflakes ENDP
+
+UpdateSnowflakes PROC USES eax ebx ecx edx edi esi
+    ; Only update snow on Screen 2
+    cmp CurrentScreen, 1
+    jne SkipSnowUpdate
+    
+    mov ecx, 30
+    mov edi, 0
+UpdateSnowLoop:
+    cmp SnowActive[edi], 0
+    je NextSnowflake
+    
+    ; Erase old position
+    push ecx
+    push edi
+    mov dl, SnowOldX[edi]
+    mov dh, SnowOldY[edi]
+    cmp dh, 2
+    jl SkipErase
+    cmp dh, 21
+    jg SkipErase
+    mov eax, lightBlue + (lightBlue * 16)
+    call SetTextColor
+    call Gotoxy
+    mov al, ' '
+    call WriteChar
+SkipErase:
+    pop edi
+    pop ecx
+    
+    ; Save current as old
+    mov al, SnowX[edi]
+    mov SnowOldX[edi], al
+    mov al, SnowY[edi]
+    mov SnowOldY[edi], al
+    
+    ; Calculate next Y position
+    mov al, SnowY[edi]
+    inc al
+    
+    ; Check if next position would hit something
+    push ecx
+    push edi
+    mov ah, al              ; ah = new Y
+    mov al, SnowX[edi]      ; al = current X
+    call IsSnowBlocked
+    pop edi
+    pop ecx
+    cmp al, 1
+    je ResetSnowflake
+    
+    ; Move snowflake down
+    inc SnowY[edi]
+    
+    ; Random horizontal drift
+    mov eax, 3
+    call RandomRange
+    cmp al, 0
+    je DriftLeft
+    cmp al, 1
+    je DriftRight
+    jmp CheckSnowBounds
+DriftLeft:
+    cmp SnowX[edi], 2
+    jbe CheckSnowBounds
+    ; Check if left position is blocked
+    push ecx
+    push edi
+    mov al, SnowX[edi]
+    dec al
+    mov ah, SnowY[edi]
+    call IsSnowBlocked
+    pop edi
+    pop ecx
+    cmp al, 1
+    je CheckSnowBounds
+    dec SnowX[edi]
+    jmp CheckSnowBounds
+DriftRight:
+    cmp SnowX[edi], 117
+    jae CheckSnowBounds
+    ; Check if right position is blocked
+    push ecx
+    push edi
+    mov al, SnowX[edi]
+    inc al
+    mov ah, SnowY[edi]
+    call IsSnowBlocked
+    pop edi
+    pop ecx
+    cmp al, 1
+    je CheckSnowBounds
+    inc SnowX[edi]
+    
+CheckSnowBounds:
+    ; Reset if reached ground level
+    cmp SnowY[edi], 21
+    jb NextSnowflake
+    
+ResetSnowflake:
+    ; Reset to top with new random X
+    mov eax, 116
+    call RandomRange
+    add al, 2
+    mov SnowX[edi], al
+    mov SnowY[edi], 3
+
+NextSnowflake:
+    inc edi
+    dec ecx
+    jnz UpdateSnowLoop
+SkipSnowUpdate:
+    ret
+UpdateSnowflakes ENDP
+
+; Check if snow position is blocked by Mario, structures, etc.
+; Input: AL = X, AH = Y
+; Output: AL = 1 if blocked, 0 if clear
+IsSnowBlocked PROC USES ebx esi edi
+    ; Check bounds
+    cmp ah, 21
+    jge SnowBlocked
+    cmp ah, 2
+    jl SnowBlocked
+    
+    ; Check if hitting Mario
+    cmp al, MarioX
+    jne NotMario
+    cmp ah, MarioY
+    je SnowBlocked
+NotMario:
+    
+    ; Check map tile
+    movzx ebx, ah
+    imul ebx, 120
+    movzx edi, al
+    add ebx, edi
+    mov esi, OFFSET Level1_Screen2
+    add esi, ebx
+    mov al, [esi]
+    
+    ; Check for blocking tiles
+    cmp al, ' '
+    je SnowClear
+    cmp al, 'G'
+    je SnowClear
+    ; Everything else blocks snow
+    jmp SnowBlocked
+    
+SnowClear:
+    mov al, 0
+    ret
+SnowBlocked:
+    mov al, 1
+    ret
+IsSnowBlocked ENDP
+
+DrawSnowflakes PROC USES eax ecx edx edi
+    ; Only draw snow on Screen 2
+    cmp CurrentScreen, 1
+    jne SkipSnowDrawAll
+    
+    mov ecx, 30
+    mov edi, 0
+DrawSnowLoop:
+    cmp SnowActive[edi], 0
+    je SkipSnowDraw
+    
+    mov dh, SnowY[edi]
+    cmp dh, 3
+    jl SkipSnowDraw
+    cmp dh, 21
+    jge SkipSnowDraw
+    
+    ; Don't draw if position is blocked
+    push ecx
+    push edi
+    mov al, SnowX[edi]
+    mov ah, SnowY[edi]
+    call IsSnowBlocked
+    pop edi
+    pop ecx
+    cmp al, 1
+    je SkipSnowDraw
+    
+    mov eax, white + (lightBlue * 16)
+    call SetTextColor
+    mov dl, SnowX[edi]
+    mov dh, SnowY[edi]
+    call Gotoxy
+    mov al, '*'
+    call WriteChar
+
+SkipSnowDraw:
+    inc edi
+    loop DrawSnowLoop
+SkipSnowDrawAll:
+    ret
+DrawSnowflakes ENDP
 
 ; =======================================================
 ; COLLISION DETECTION
@@ -985,6 +1250,7 @@ CollectCoin:
     inc CoinsCollected
     push eax
     push edx
+    ; Play coin sound asynchronously (non-blocking)
     INVOKE PlaySound, OFFSET fileCoin, NULL, SND_FILENAME OR SND_ASYNC
     mov eax, white + (black * 16)
     call SetTextColor
@@ -1000,13 +1266,20 @@ CollectCoin:
 
 TriggerWin:
     call SaveHighScore
+    INVOKE PlaySound, NULL, 0, SND_PURGE
     call Clrscr
-    mov dl, 55
-    mov dh, 12
+    mov dl, 50
+    mov dh, 11
     call Gotoxy
     mov edx, OFFSET strWin
     call WriteString
+    mov dl, 53
+    mov dh, 13
+    call Gotoxy
+    mov edx, OFFSET strScoreSaved
+    call WriteString
     call WaitMsg
+    ; Exit - user will restart game to play again
     exit
 
 IsSolidTile ENDP
@@ -1106,7 +1379,14 @@ D_Sky:  mov eax, white + (lightBlue*16)
         mov al, ' '
         call WriteChar
         jmp NextT
-D_Gnd:  mov eax, white + (green*16)
+D_Gnd:  ; Ground - white on Screen 2 (snow), green on Screen 1
+        cmp CurrentScreen, 1
+        je D_GndSnow
+        mov eax, white + (green*16)
+        jmp D_GndDraw
+D_GndSnow:
+        mov eax, white + (white*16)
+D_GndDraw:
         call SetTextColor
         call Gotoxy
         mov al, ' '
@@ -1201,14 +1481,14 @@ EraseMario ENDP
 DrawFullMenu PROC
     call Clrscr
     call DrawBorder
-    mov dl, 31
-    mov dh, 1
+    mov dl, 35
+    mov dh, 3
     call DrawTitleSuper
-    mov dl, 37
-    mov dh, 7
+    mov dl, 41
+    mov dh, 9
     call DrawTitleMasm
-    mov dl, 37
-    mov dh, 13
+    mov dl, 41
+    mov dh, 15
     call DrawTitleBros
     call DrawMenuText
     call DrawFooter
@@ -1248,93 +1528,77 @@ L3: mov dl, 0
 DrawBorder ENDP
 
 DrawMenuText PROC
-    mov dl, 52
+    ; Option 0 - BEGIN GAME
+    mov dl, 49
     mov dh, 19
     call Gotoxy
     cmp MenuSelection, 0
     je Hl0
     mov eax, gray + (black * 16)
     call SetTextColor
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt0
     call WriteString
     jmp Draw1
 Hl0:
-    mov eax, lightRed + (black * 16)
+    mov eax, white + (red * 16)
     call SetTextColor
-    mov al, '>'
-    call WriteChar
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt0
     call WriteString
+
 Draw1:
-    mov dl, 52
+    ; Option 1 - LEADERBOARD
+    mov dl, 49
     mov dh, 20
     call Gotoxy
     cmp MenuSelection, 1
     je Hl1
     mov eax, gray + (black * 16)
     call SetTextColor
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt1
     call WriteString
     jmp Draw2
 Hl1:
-    mov eax, lightRed + (black * 16)
+    mov eax, white + (red * 16)
     call SetTextColor
-    mov al, '>'
-    call WriteChar
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt1
     call WriteString
+
 Draw2:
-    mov dl, 52
+    ; Option 2 - SETTINGS
+    mov dl, 49
     mov dh, 21
     call Gotoxy
     cmp MenuSelection, 2
     je Hl2
     mov eax, gray + (black * 16)
     call SetTextColor
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt2
     call WriteString
     jmp Draw3
 Hl2:
-    mov eax, lightRed + (black * 16)
+    mov eax, white + (red * 16)
     call SetTextColor
-    mov al, '>'
-    call WriteChar
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt2
     call WriteString
+
 Draw3:
-    mov dl, 52
+    ; Option 3 - EXIT
+    mov dl, 49
     mov dh, 22
     call Gotoxy
     cmp MenuSelection, 3
     je Hl3
     mov eax, gray + (black * 16)
     call SetTextColor
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt3
     call WriteString
     jmp DnMenu
 Hl3:
-    mov eax, lightRed + (black * 16)
+    mov eax, white + (red * 16)
     call SetTextColor
-    mov al, '>'
-    call WriteChar
-    mov al, ' '
-    call WriteChar
     mov edx, OFFSET strOpt3
     call WriteString
+
 DnMenu:
     ret
 DrawMenuText ENDP
@@ -1342,7 +1606,7 @@ DrawMenuText ENDP
 DrawFooter PROC
     mov eax, gray + (black * 16)
     call SetTextColor
-    mov dl, 42
+    mov dl, 38
     mov dh, 23
     call Gotoxy
     mov edx, OFFSET strFooter
