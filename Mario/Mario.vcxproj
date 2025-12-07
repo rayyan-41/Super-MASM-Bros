@@ -29,6 +29,9 @@
     <Media Include="start.wav" />
     <Media Include="start_mario.wav" />
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="highscore.txt" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

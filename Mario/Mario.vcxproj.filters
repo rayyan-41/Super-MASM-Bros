@@ -39,4 +39,9 @@
       <Filter>Resource Files</Filter>
     </Media>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="highscore.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+  </ItemGroup>
 </Project>
