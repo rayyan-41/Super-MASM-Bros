@@ -26,7 +26,6 @@ Navigate Mario through three platformer screens per world, collect coins, stomp 
 | Feature | Description |
 |---|---|
 | **Main Menu** | Animated title, 5-option menu (Begin Game, Leaderboard, Settings, Instructions, Exit) |
-| **Player Name Entry** | Enter your name before starting; saved alongside your score |
 | **3 Screens × 2 Worlds** | World 1-1, 1-2, 1-3 (Snow), World 2-1 (Boss) |
 | **Physics** | Gravity, jumping, collision detection |
 | **Enemies** | Up to 10 active Goombas per screen; stomp or shoot them |
@@ -35,11 +34,8 @@ Navigate Mario through three platformer screens per world, collect coins, stomp 
 | **Snow Weather** | Falling snowflakes on the World 1-3 (Snow) screen |
 | **Hell Mode** | Inverts the full colour palette for a challenge |
 | **Fly Mode** | Disables gravity — move freely in all directions |
-| **Pause Menu** | Pause mid-game; continue or return to the main menu |
-| **Funny Sound** | Trigger a surprise sound effect at any time |
 | **Background Music** | Per-screen WAV music via Windows Multimedia API |
 | **Sound Effects** | Coin collect, jump, game-start, and more |
-| **High Score Board** | Scores written to `highscore.txt` using Win32 File API; viewable in-game |
 | **Settings Screen** | Toggle background music on/off |
 | **Dynamic Palette** | Animated colour cycling on the menu title |
 
